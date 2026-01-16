@@ -4,6 +4,7 @@ import pMap from 'p-map';
 import type { DataItem, Route } from '@/types';
 import cache from '@/utils/cache';
 import ofetch from '@/utils/ofetch';
+import { parseDate } from '@/utils/parse-date';
 
 export const route: Route = {
     path: '/news',
@@ -27,19 +28,23 @@ async function handler(ctx) {
     const $ = load(response);
     const limit = ctx.req.query('limit') ? Number.parseInt(ctx.req.query('limit'), 10) : 20;
 
-    const list: DataItem[] = $('.contentFadeUp a')
+    const list: DataItem[] = $('ul[class*="PublicationList-module"] a[class*="PublicationList-module"]')
         .toArray()
         .slice(0, limit)
         .map((el) => {
             const $el = $(el);
-            const title = $el.find('h3').text().trim();
+            const title = $el.find('span[class*="__title"]').text().trim() || $el.find('h2, h4, [class*="featuredTitle"], [class*="__title"]').text().trim();
             const href = $el.attr('href') ?? '';
-            const pubDate = $el.find('p.detail-m.agate').text().trim() || $el.find('div[class^="PostList_post-date__"]').text().trim(); // legacy selector used roughly before Jan 2025
+            const pubDateText = $el.find('time').text().trim();
             const fullLink = href.startsWith('http') ? href : `https://www.anthropic.com${href}`;
+            const pubDate = pubDateText ? parseDate(pubDateText) : undefined;
+            const category = $el.find('span[class*="__subject"]').text().trim();
+
             return {
                 title,
                 link: fullLink,
                 pubDate,
+                category,
             };
         });
 
@@ -52,25 +57,25 @@ async function handler(ctx) {
 
                 const content = $('#main-content');
 
-                // Remove meaningless information (heading, sidebar, quote carousel, footer and codeblock controls)
-                $(`
-                    [class^="PostDetail_post-heading"],
-                    [class^="ArticleDetail_sidebar-container"],
-                    [class^="QuoteCarousel_carousel-controls"],
-                    [class^="PostDetail_b-social-share"],
-                    [class^="LandingPageSection_root"],
-                    [class^="CodeBlock_controls"]
-                `).remove();
+                content.find('[class*="PostDetail-module"][class*="socialShare"], [class*="subjects"]').remove();
+                content.find('header, [class*="header"]').remove();
+                content.find('footer, [class*="SiteFooter"], [class*="Recirculation"]').remove();
 
                 content.find('img').each((_, e) => {
                     const $e = $(e);
-                    $e.removeAttr('style srcset');
                     const src = $e.attr('src');
-                    const params = new URLSearchParams(src);
-                    const newSrc = params.get('/_next/image?url');
-                    if (newSrc) {
-                        $e.attr('src', newSrc);
+                    if (src && src.includes('/_next/image?url=')) {
+                        try {
+                            const params = new URLSearchParams(src);
+                            const newSrc = params.get('/_next/image?url');
+                            if (newSrc) {
+                                $e.attr('src', newSrc);
+                            }
+                        } catch {
+                            // URL parsing failed, keep original src
+                        }
                     }
+                    $e.removeAttr('style srcset');
                 });
 
                 item.description = content.html() ?? undefined;
