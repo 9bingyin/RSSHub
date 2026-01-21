@@ -5,6 +5,7 @@ import type { DataItem, Route } from '@/types';
 import cache from '@/utils/cache';
 import ofetch from '@/utils/ofetch';
 import { parseDate } from '@/utils/parse-date';
+import timezone from '@/utils/timezone';
 
 export const route: Route = {
     path: '/news',
@@ -37,7 +38,7 @@ async function handler(ctx) {
             const href = $el.attr('href') ?? '';
             const pubDateText = $el.find('time').text().trim();
             const fullLink = href.startsWith('http') ? href : `https://www.anthropic.com${href}`;
-            const pubDate = pubDateText ? parseDate(pubDateText) : undefined;
+            const pubDate = pubDateText ? timezone(parseDate(pubDateText), -8) : undefined;
             const category = $el.find('span[class*="__subject"]').text().trim();
 
             return {
